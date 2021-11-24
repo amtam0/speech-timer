@@ -1,0 +1,24 @@
+
+FROM python:3.8
+USER root
+
+# Set default port.
+ENV PORT 80
+RUN apt-get update
+RUN apt-get install nano
+RUN apt-get install ffmpeg -y
+
+WORKDIR /app
+COPY app/ .
+
+RUN python3 -m venv /opt/venv
+RUN . /opt/venv/bin/activate
+RUN pip install -r requirements.txt
+RUN pip install pip-autoremove
+RUN pip-autoremove torch==1.10.0 -y
+RUN pip-autoremove torchaudio==0.10.0 -y
+RUN pip install torch==1.10.0+cpu torchaudio==0.10.0+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html
+
+RUN python download_models.py
+# Run the web service using gunicorn.
+CMD . /opt/venv/bin/activate && exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 120 main:app
