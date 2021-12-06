@@ -1,64 +1,96 @@
-## Voice Enabled Sport Interval Timer using Transformers models
+## EFREI setup
 
-<img src="docs/pres.png" width=800px/>
+#### Installations
+1. Docker / docker-compose : https://docs.docker.com/get-docker/
+To get used to basic commands check : https://docs.docker.com/get-started/
 
-### Toolset
+2. Ngrok : is a local tunnel URL that is essential to share Webapps during annotation process.
+You need to create 2 accounts from this link https://ngrok.com/ and copy the 2 authtokens
+Download Ngrok depending on your OS, and add it to the home folder (unzipped Drive)
 
-- Flair is a library on top of Transformers, used to train top notch NER models.
-- Speechbrain pretrained models manually selected from HuggingFace based on performance.
-- Text2num to convert text digits to numbers.
-
-### The app
-The app supports for now only English and French, it uses 5 models:
-- Language detector: Speechbrain pre-trained from [HF](https://huggingface.co/speechbrain/lang-id-commonlanguage_ecapa)
-- English ASR: Speechbrain Wav2vec2 model fine-tuned on commonvoice EN dataset from [HF](https://huggingface.co/speechbrain/asr-wav2vec2-commonvoice-en)
-- French ASR: Speechbrain Wav2vec2 model fine-tuned on commonvoice FR dataset from [HF](https://huggingface.co/speechbrain/asr-wav2vec2-commonvoice-fr)
-- Custom French NER: Fine-tuned camembert-base model, trained using Flair, deployed in [HF](https://huggingface.co/amtam0)
-- Custom English NER: Fine-tuned distilroberta-base model, trained using Flair, deployed in [HF](https://huggingface.co/amtam0)
-
-Dataset for NER was built manually, using simple sentences to interact with the timer to be filled up:
-
-Sentences example:
+3. download and unzip the folder in Drive
+add Authtokens (from ngrok) in ngrok_ML.yml and nrok_LS.yml respectively.
+#### Start/Expose labelstudio
+- To start Labelstudio
 ```
-19 sets of 3 minutes 21 minutes between sets
-start 7 sets of 32 seconds
-create 13 sets of 26 seconds
-init 8 series of 3 hours
-2 sets of 30 seconds 35 minutes between each cycle
-...
+./ngrok start --config=ngrok_LS.yml labelstudio #use the shown url in the next command
+```
+- Specify the ngrok url shown to run Labelstudio
+```
+cd labelstudioUI
+LABEL_STUDIO_HOST=https://....ngrok.io docker-compose up
+```
+The Labelstudio Webapp will be accessible via the Url https://....ngrok.io
+
+#### Config labelstudio
+1. Create new project and give it a name (Ex. NER1)
+
+2. In Labeling Interface, use this template (copy/paste)
+Go to Project > Settings > Labelling Interface and copy/paste the xml below. It specifies the entities that will be used for annotation
+```
+<View>
+  <Labels name="label" toName="text">
+    <Label value="nb_rounds"/>
+    <Label value="duration_br_sd"/>
+    <Label value="duration_br_min"/>
+    <Label value="duration_br_hr"/>
+    <Label value="duration_wt_sd"/>
+    <Label value="duration_wt_min"/>
+    <Label value="duration_wt_hr"/>
+  </Labels>
+  <Text name="text" value="$text" valueType="url"/>
+</View>
 ```
 
-Results, models architecture and parameters, training logs and datasets can be found in [HF](https://huggingface.co/amtam0)
+<img src="doc-imgs/config.png" width=500px/>
 
-<img src="docs/flow.png" width=800px/>
+3. In settings > General select random sampling
 
-for the UI, used codepen templates (references below).
+<img src="doc-imgs/random_sample.png" width=500px/>
 
-Demo link, based on 10 sec input audio file:
-- `index` (only English) deployed on Cloud Run, ~6 sec response time. 
-- `indexgpu` (EN+FR) ~below 1 sec response time using Gpu.
+#### load data in labelstudio
+`cd notebooks; jupyter notebook`
+change these variables in **NER_create_dataset.ipynb**
+- TOKEN: Go to Account and Settings and copy Access Token
+- HOST : ngrok url (not localhost) that gives access to Labelstudio
 
-Tested on i7 8700k cpu : response time is around 2 seconds.
+- Run the notebook
+it will create the dataset in **training/data/unlabeled/task.json**
+and send it to Labelstudio
 
-### To build & deploy locally
-1. Clone the repo
-2. Build Docker image : `docker build -t <REPOSITORY-NAME>/<IMAGE>:<TAG> .`
-2. Deploy locally : Run Docker image and check if Api is working by running http://localhost:10000
-    - CPU : `docker run -it -v -p 10000:80 <REPOSITORY-NAME>/<IMAGE>:<TAG>`
-    - GPU : `docker run -it --gpus all -p 10000:80 <REPOSITORY-NAME>/<IMAGE>:<TAG>`
+Start annotation !
 
-### Limits and Areas for improvements
-- NER:
-    - Dataset is simple but is easily optimisable, can be more generic
-    - Error handling Ex. duplicate entities, out of context, ASR errors...
-- ASR limitations : big models, slow inference on cpu
-    - Explore ditributed inference on cpu, and model compression
-- Webapp UI Smartphone : timer stops after dozen seconds when screen is off (HTML5 running apps when screen off is not supported yet)
+Note : use the Label all task button to start annotation (recommended)
+<img src="doc-imgs/labelling.png" width=500px/>
 
-### References
-- Huggingface https://huggingface.co/models
-- Flair https://github.com/flairNLP/flair
-- Speechbrain https://github.com/speechbrain/speechbrain
-- Recorder JS https://codepen.io/robert_bakiev/pen/VpoLYo
-- Timer JS https://codepen.io/LauraNK/pen/rxWLMy
-- Text2num https://github.com/allo-media/text2num
+#### Setup / Connect ML backend
+- Setup env, do it once
+```
+conda create -n labelstudioml python=3.8
+conda activate labelstudioml
+conda install nb_conda
+pip install jupyter flair==0.9.0
+git clone https://github.com/heartexlabs/label-studio-ml-backend
+cd label-studio-ml-backend
+pip install -U -e .
+```
+- To init / reset Labelstudio ML backend
+```
+cd ..
+label-studio-ml init my-ml --script models/flairner.py --force
+```
+- To start the ML BACKEND
+1. Start your backend
+```
+label-studio-ml start ./my-ml/ --port=4000 --host=localhost --debug
+```
+2. run Ngrok to tunnel http://localhost:4000
+```
+./ngrok start --config=ngrok_LS.yml labelstudio #use the shown url in the next command
+```
+CLick the link that will show up to access the Api
+
+
+- To connect ML backend to Labelstudio check screen below
+
+<img src="doc-imgs/mlbackend.png" width=500px/>
