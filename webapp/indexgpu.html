@@ -15,6 +15,30 @@
       <script src="lib/js/tabata.js" type="text/javascript"></script>
       <link rel="stylesheet" type="text/css" href="lib/css/recorder.css"/>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <script defer>
+        function UrlExists(url, cb){
+            jQuery.ajax({
+                url:      url,
+                dataType: 'text',
+                type:     'GET',
+                complete:  function(xhr){
+                    if(typeof cb === 'function')
+                      cb.apply(this, [xhr.status]);
+                }
+            });
+        }
+        UrlExists('https://appi.ngrok.io', function(status){
+            if(status === 200){
+              // file was found
+              result = 'server up';
+            }
+            else{
+              // not found
+              result = 'server down';
+            }
+            document.getElementById("APISTATUS").innerHTML = result;
+        });
+      </script>
     </head>
     <body ng-app="tabataApp">
 
